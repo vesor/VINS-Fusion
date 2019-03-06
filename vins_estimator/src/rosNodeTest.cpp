@@ -21,23 +21,32 @@
 #include "estimator/parameters.h"
 #include "utility/visualization.h"
 
+//#define IMAGE_COMPRESSED
+
+#ifdef IMAGE_COMPRESSED
+#include <sensor_msgs/CompressedImage.h>
+#define MSG_IMAGE_TYPE sensor_msgs::CompressedImage
+#else
+#define MSG_IMAGE_TYPE sensor_msgs::Image
+#endif
+
 Estimator estimator;
 
 queue<sensor_msgs::ImuConstPtr> imu_buf;
 queue<sensor_msgs::PointCloudConstPtr> feature_buf;
-queue<sensor_msgs::ImageConstPtr> img0_buf;
-queue<sensor_msgs::ImageConstPtr> img1_buf;
+queue<MSG_IMAGE_TYPE::ConstPtr> img0_buf;
+queue<MSG_IMAGE_TYPE::ConstPtr> img1_buf;
 std::mutex m_buf;
 
 
-void img0_callback(const sensor_msgs::ImageConstPtr &img_msg)
+void img0_callback(const MSG_IMAGE_TYPE::ConstPtr &img_msg)
 {
     m_buf.lock();
     img0_buf.push(img_msg);
     m_buf.unlock();
 }
 
-void img1_callback(const sensor_msgs::ImageConstPtr &img_msg)
+void img1_callback(const MSG_IMAGE_TYPE::ConstPtr &img_msg)
 {
     m_buf.lock();
     img1_buf.push(img_msg);
@@ -45,12 +54,15 @@ void img1_callback(const sensor_msgs::ImageConstPtr &img_msg)
 }
 
 
-cv::Mat getImageFromMsg(const sensor_msgs::ImageConstPtr &img_msg)
+cv::Mat getImageFromMsg(const MSG_IMAGE_TYPE::ConstPtr &img_msg)
 {
     cv_bridge::CvImageConstPtr ptr;
+#ifdef IMAGE_COMPRESSED
+    ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
+#else
     if (img_msg->encoding == "8UC1")
     {
-        sensor_msgs::Image img;
+        MSG_IMAGE_TYPE img;
         img.header = img_msg->header;
         img.height = img_msg->height;
         img.width = img_msg->width;
@@ -62,7 +74,7 @@ cv::Mat getImageFromMsg(const sensor_msgs::ImageConstPtr &img_msg)
     }
     else
         ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
-
+#endif
     cv::Mat img = ptr->image.clone();
     return img;
 }
