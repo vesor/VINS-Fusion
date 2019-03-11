@@ -38,6 +38,7 @@ class FeatureTracker
 public:
     FeatureTracker();
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> trackImage(double _cur_time, const cv::Mat &_img, const cv::Mat &_img1 = cv::Mat());
+    void setCropRegion(int x, int y, int w, int h) { m_crop_region = cv::Rect2i(x, y, w, h); }
     void setMask();
     void addPoints();
     void readIntrinsicParameter(const vector<string> &calib_file);
@@ -82,4 +83,7 @@ public:
     bool stereo_cam;
     int n_id;
     bool hasPrediction;
+
+private:
+    cv::Rect2i m_crop_region;
 };

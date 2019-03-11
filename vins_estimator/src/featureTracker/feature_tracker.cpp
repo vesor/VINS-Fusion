@@ -45,7 +45,7 @@ void reduceVector(vector<int> &v, vector<uchar> status)
     v.resize(j);
 }
 
-FeatureTracker::FeatureTracker()
+FeatureTracker::FeatureTracker(): m_crop_region(0,0,-1,-1)
 {
     stereo_cam = 0;
     n_id = 0;
@@ -54,8 +54,14 @@ FeatureTracker::FeatureTracker()
 
 void FeatureTracker::setMask()
 {
-    mask = cv::Mat(row, col, CV_8UC1, cv::Scalar(255));
-
+    if (m_crop_region.width > 0 && m_crop_region.height > 0) {
+        mask = cv::Mat(row, col, CV_8UC1, cv::Scalar(0));
+        cv::rectangle(mask, m_crop_region, cv::Scalar(255), -1);
+    }
+    else {
+        mask = cv::Mat(row, col, CV_8UC1, cv::Scalar(255));
+    }
+    
     // prefer to keep features that are tracked for long time
     vector<pair<int, pair<cv::Point2f, int>>> cnt_pts_id;
 
@@ -192,6 +198,13 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
             if (mask.type() != CV_8UC1)
                 cout << "mask type wrong " << endl;
             cv::goodFeaturesToTrack(cur_img, n_pts, MAX_CNT - cur_pts.size(), 0.01, MIN_DIST, mask);
+
+            // cv::Mat img_clone = cur_img.clone();
+            // for (const auto& pts : n_pts) {
+            //     cv::circle(img_clone, pts, 10, 255);
+            // }
+            // std::cout<< "pts " << n_pts.size() << std::endl;
+            // cv::imshow("test", img_clone);
         }
         else
             n_pts.clear();
