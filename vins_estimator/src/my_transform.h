@@ -60,7 +60,7 @@ Eigen::Matrix<FloatType, 4, 4> TransformFromRT(const Eigen::Matrix<FloatType, 3,
     return X;
 }
 
-// X must be in SO(3)
+// X must be in SE(3)
 template <typename FloatType>
 Eigen::Matrix<FloatType, 4, 4> TransformInverse(const Eigen::Matrix<FloatType, 4, 4>& X)
 {

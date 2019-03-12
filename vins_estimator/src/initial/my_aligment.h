@@ -2,4 +2,4 @@
 
 #include "initial_alignment.h"
 
-bool MyVisualOdomAlignment(map<double, ImageFrame> &all_image_frame, Vector3d* poses, VectorXd &x);
+bool VisualOdomAlignment(std::map<double, ImageFrame> &all_image_frame, Eigen::VectorXd &x);

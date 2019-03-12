@@ -34,6 +34,8 @@ class ImageFrame
         Matrix3d R;
         Vector3d T;
         IntegrationBase *pre_integration;
+        Eigen::Vector3d p_odom;
+        Eigen::Quaterniond q_odom;
         bool is_key_frame;
 };
 void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs);

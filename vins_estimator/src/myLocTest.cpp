@@ -35,7 +35,7 @@ public:
     void img0_callback(const MSG_IMAGE_TYPE::ConstPtr &img_msg);
     void odom_callback(const nav_msgs::Odometry::ConstPtr& msg);
     cv::Mat getImageFromMsg(const MSG_IMAGE_TYPE::ConstPtr &img_msg);
-    void on_3d_points_produced(const std::vector<Eigen::Vector3f>& points, double time);
+    void on_3d_points_produced(const std::vector<Eigen::Vector3d>& points, double time);
     void sync_process();
 
 
@@ -77,7 +77,7 @@ void MyNode::img0_callback(const MSG_IMAGE_TYPE::ConstPtr &img_msg)
 void MyNode::odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
 {
     auto t = msg->header.stamp.toSec();
-    Eigen::Vector3f pose;
+    Eigen::Vector3d pose;
     pose.x() = msg->pose.pose.position.x;
     pose.y() = msg->pose.pose.position.y;
 
@@ -114,7 +114,7 @@ cv::Mat MyNode::getImageFromMsg(const MSG_IMAGE_TYPE::ConstPtr &img_msg)
     return img;
 }
 
-void MyNode::on_3d_points_produced(const std::vector<Eigen::Vector3f>& points, double time)
+void MyNode::on_3d_points_produced(const std::vector<Eigen::Vector3d>& points, double time)
 {
     sensor_msgs::PointCloud msg;
     sensor_msgs::PointCloud2 msg2;
