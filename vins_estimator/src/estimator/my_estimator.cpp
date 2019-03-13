@@ -336,8 +336,8 @@ void MyEstimator::processImage(const std::map<int, std::vector<std::pair<int, Ei
         f_manager_.removeOutlier(removeIndex);
         //if (! MULTIPLE_THREAD)
         {
-            feature_tracker_.removeOutliers(removeIndex);
-            predictPtsInNextFrame();
+            // feature_tracker_.removeOutliers(removeIndex);
+            // predictPtsInNextFrame();
         }
             
         ROS_DEBUG("solver costs: %fms", t_solve.toc());
