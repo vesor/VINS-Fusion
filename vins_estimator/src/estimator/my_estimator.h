@@ -17,6 +17,7 @@
 #include <eigen3/Eigen/Geometry>
 
 #include "../utility/tic_toc.h"
+#include "../utility/my_visualization.h"
 
 #include "parameters.h"
 #include "my_feature_manager.h"
@@ -27,6 +28,8 @@
 
 class MyEstimator
 {
+    friend class MyVisualizer;
+
 #if 0
 public:
     struct FeaturePoint {
@@ -41,7 +44,7 @@ public:
 #endif
 
 public:
-    MyEstimator();
+    MyEstimator(ros::NodeHandle &n);
     void setPointsCloudCallback(std::function<void(const std::vector<Eigen::Vector3d>&, double)> callback) {
         points_cloud_callback_ = callback;
     }
@@ -55,8 +58,6 @@ public:
     void processOdom(double dt, const Eigen::Vector3d &delta_pose);
     void processImage(const std::map<int, std::vector<std::pair<int, Eigen::Matrix<double, 7, 1>>>> &image, 
             const double header, const Eigen::Vector3d& odom_pose);
-
-    
 
 private:
     void clearState();
@@ -120,4 +121,5 @@ private:
     std::vector<Eigen::Vector3d> key_poses_;
 
     std::function<void(const std::vector<Eigen::Vector3d>&, double)> points_cloud_callback_;
+    MyVisualizer visualizer_;
 };

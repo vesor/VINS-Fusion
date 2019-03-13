@@ -102,7 +102,7 @@ void triangulate_points(const std::vector<std::pair<MyEstimator::FeaturePoint,My
 }
 #endif
 
-MyEstimator::MyEstimator(): f_manager_{Rs_}
+MyEstimator::MyEstimator(ros::NodeHandle &n): f_manager_(Rs_), visualizer_(n, *this) 
 {
     ROS_INFO("init begins");
     clearState();
@@ -231,9 +231,19 @@ void MyEstimator::processMeasurements()
 
     if (prevTime_ > 0) 
     {
+        auto t = feature.first;
         processOdom(curTime_ - prevTime_, delta_pose);
 
-        processImage(feature.second, feature.first, odom_pose);
+        processImage(feature.second, t, odom_pose);
+
+        visualizer_.printStatistics(0);
+
+        visualizer_.pubOdometry(t);
+        visualizer_.pubKeyPoses(t);
+        visualizer_.pubCameraPose(t);
+        visualizer_.pubPointCloud(t);
+        visualizer_.pubKeyframe();
+        visualizer_.pubTF(t);
     }
 
     prevTime_ = curTime_;

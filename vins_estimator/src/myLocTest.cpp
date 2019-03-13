@@ -53,7 +53,7 @@ private:
     MyEstimator estimator_;
 };
 
-MyNode::MyNode(const std::string& config_file): nh_("~")
+MyNode::MyNode(const std::string& config_file): nh_("~"),estimator_(nh_)
 {
     readParameters(config_file);
     estimator_.setParameter();
@@ -198,7 +198,7 @@ int main(int argc, char **argv)
 
     ROS_WARN("waiting for image and imu...");
 
-    
+
     MyNode my_node(config_file);
     std::thread sync_thread(&MyNode::sync_process, &my_node);
 

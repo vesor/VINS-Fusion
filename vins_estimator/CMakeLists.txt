@@ -46,6 +46,7 @@ add_library(vins_lib
     src/factor/marginalization_factor.cpp
     src/utility/utility.cpp
     src/utility/visualization.cpp
+    src/utility/my_visualization.cpp
     src/utility/CameraPoseVisualization.cpp
     src/initial/solve_5pts.cpp
     src/initial/initial_aligment.cpp
