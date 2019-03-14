@@ -11,7 +11,7 @@ using EigenVector3 = EigenVector<T, 3>;
 template <typename FloatType> 
 EigenVector3<FloatType> RPYFromQuat(const Eigen::Quaternion<FloatType>& quat)
 {
-    return quat.toRotationMatrix().eulerAngles(0, 1, 2);
+    return quat.normalized().toRotationMatrix().eulerAngles(0, 1, 2);
 }
 
 template <typename FloatType> 
@@ -76,7 +76,7 @@ Eigen::Matrix<FloatType, 4, 4> TransformInverse(const Eigen::Matrix<FloatType, 4
 template <typename FloatType>
 Eigen::Matrix<FloatType, 4, 4> TransformFromRigid2(const EigenVector3<FloatType>& T)
 {
-    auto R = QuatFromRPY<FloatType>(0, 0, T[2]).toRotationMatrix();
+    auto R = QuatFromRPY<FloatType>(0, 0, T[2]).normalized().toRotationMatrix();
     auto T0 = T;
     T0[2] = 0;
     return TransformFromRT(R, T0);

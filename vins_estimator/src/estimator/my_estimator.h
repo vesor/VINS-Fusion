@@ -25,6 +25,7 @@
 #include "../initial/my_aligment.h"
 #include "../initial/initial_sfm.h"
 #include "../initial/solve_5pts.h"
+#include "../factor/marginalization_factor.h"
 
 class MyEstimator
 {
@@ -68,6 +69,8 @@ private:
     void slideWindowNew();
     void slideWindowOld();
     void optimization();
+    void vector2double();
+    void double2vector();
     bool failureDetection();
     void getPoseInWorldFrame(Eigen::Matrix4d &T);
     void getPoseInWorldFrame(int index, Eigen::Matrix4d &T);
@@ -110,6 +113,14 @@ private:
     int frame_count_;
     int sum_of_outlier_, sum_of_back_, sum_of_front_, sum_of_invalid_;
     
+    double para_Pose_[WINDOW_SIZE + 1][SIZE_POSE];
+    double para_Feature_[NUM_OF_F][SIZE_FEATURE];
+    double para_Ex_Pose_[2][SIZE_POSE];
+    double para_Td_[1][1];
+
+    MarginalizationInfo *last_marginalization_info_;
+    std::vector<double *> last_marginalization_parameter_blocks_;
+
     std::map<double, ImageFrame> all_image_frame_;
 
     FeatureTracker feature_tracker_;

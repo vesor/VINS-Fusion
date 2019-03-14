@@ -17,16 +17,7 @@ bool VisualOdomAlignment(std::map<double, ImageFrame> &all_image_frame, Eigen::V
         return false;
     }
 
-    int n_state = all_frame_count - 1;  
-    
-    // {
-    //     int frk = n_state;
-    //     Eigen::VectorXd b(frk);
-    //     for (int i = 0; i < frk; ++i) {
-    //         printf("i=%d, %d\n",i, frk);
-    //         b(i) = 1.0; 
-    //     }
-    // }  
+    int n_state = all_frame_count - 1; 
     
     Eigen::MatrixXd A(n_state, 1);
     A.setZero();

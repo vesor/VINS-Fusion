@@ -133,22 +133,22 @@ void MyVisualizer::pubOdometry(double t)
         pub_path.publish(path);
 
         // write result to file
-        // ofstream foutC(VINS_RESULT_PATH, ios::app);
-        // foutC.setf(ios::fixed, ios::floatfield);
-        // foutC.precision(0);
-        // foutC << header.stamp.toSec() * 1e9 << ",";
-        // foutC.precision(5);
-        // foutC << estimator.Ps_[WINDOW_SIZE].x() << ","
-        //       << estimator.Ps_[WINDOW_SIZE].y() << ","
-        //       << estimator.Ps_[WINDOW_SIZE].z() << ","
-        //       << tmp_Q.w() << ","
-        //       << tmp_Q.x() << ","
-        //       << tmp_Q.y() << ","
-        //       << tmp_Q.z() << "," << endl;
-        // foutC.close();
-        // Eigen::Vector3d tmp_T = estimator.Ps[WINDOW_SIZE];
-        // printf("time: %f, t: %f %f %f q: %f %f %f %f \n", header.stamp.toSec(), tmp_T.x(), tmp_T.y(), tmp_T.z(),
-        //                                                   tmp_Q.w(), tmp_Q.x(), tmp_Q.y(), tmp_Q.z());
+        ofstream foutC(VINS_RESULT_PATH, ios::app);
+        foutC.setf(ios::fixed, ios::floatfield);
+        foutC.precision(0);
+        foutC << odometry.header.stamp.toSec() * 1e9 << ",";
+        foutC.precision(5);
+        foutC << estimator.Ps_[WINDOW_SIZE].x() << ","
+              << estimator.Ps_[WINDOW_SIZE].y() << ","
+              << estimator.Ps_[WINDOW_SIZE].z() << ","
+              << tmp_Q.w() << ","
+              << tmp_Q.x() << ","
+              << tmp_Q.y() << ","
+              << tmp_Q.z() << "," << endl;
+        foutC.close();
+        Eigen::Vector3d tmp_T = estimator.Ps_[WINDOW_SIZE];
+        printf("time: %f, t: %f %f %f q: %f %f %f %f \n", odometry.header.stamp.toSec(), tmp_T.x(), tmp_T.y(), tmp_T.z(),
+                                                          tmp_Q.w(), tmp_Q.x(), tmp_Q.y(), tmp_Q.z());
     }
 }
 
