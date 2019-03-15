@@ -5,7 +5,7 @@
 
 #include "my_estimator.h"
 #include "../my_transform.h"
-#include "../factor/odom_factor.h"
+#include "../factor/odom_functor.h"
 #include "../factor/pose_local_parameterization.h"
 #include "../factor/projectionTwoFrameOneCamFactor.h"
 #include "../factor/projectionOneFrameTwoCamFactor.h"
@@ -114,7 +114,7 @@ MyEstimator::MyEstimator(ros::NodeHandle &n):
 
     prevTime_ = -1;
     curTime_ = 0;
-}
+} 
 
 void MyEstimator::setParameter()
 {
@@ -336,9 +336,17 @@ void MyEstimator::processImage(const std::map<int, std::vector<std::pair<int, Ei
     else
     {
         TicToc t_solve;
+
         // if(!USE_IMU)
         //     f_manager_.initFramePoseByPnP(frame_count_, Ps_, Rs_, tic_, ric_);
+        
+        // Weizhe Liu: align odom to avoid scale drift, similar as we do when init.
+        // Odom is not used when do BA, because odom is not well modeled as IMU.
+        // So this is just a loosely coupled optmization like in initialization.
+        // visualOptimizeAlign();
+
         f_manager_.triangulate(frame_count_, Ps_, Rs_, tic_, ric_);
+
         optimization();
         std::set<int> removeIndex;
         outliersRejection(removeIndex);
@@ -416,6 +424,14 @@ bool MyEstimator::initialStructure()
         marginalize_old_ = true;
         return false;
     }
+
+    // std::cout << "==== TIC " << TIC[0].transpose() << std::endl 
+    //             << " RIC " << RPYFromQuat(Eigen::Quaterniond(RIC[0])).transpose() << std::endl;
+
+    // for (int i = 0; i <= frame_count_;++i) {
+    //     std::cout << "==== i " << i << " Ts " << T[i].transpose() << std::endl 
+    //             << " Qs " << RPYFromQuat(Eigen::Quaterniond(Q[i])).transpose() << std::endl;
+    // }
     //printf("t_sfm %i time: %f\n", (int)sfm_f.size(), t_sfm.toc());
     //solve pnp for all frame
     std::map<double, ImageFrame>::iterator frame_it;
@@ -428,8 +444,13 @@ bool MyEstimator::initialStructure()
         if((frame_it->first) == headers_[i])
         {
             frame_it->second.is_key_frame = true;
-            frame_it->second.R = Q[i].toRotationMatrix() * RIC[0].transpose();
-            frame_it->second.T = T[i];
+            // frame_it->second.R = Q[i].toRotationMatrix() * RIC[0].transpose();
+            // frame_it->second.T = T[i];
+
+            // Weizhe Liu: convert R/t to be in body (IMU) coordinate
+            // which means R/t is the camera pose in frame0's body coord 
+            frame_it->second.R = Eigen::Quaterniond(RIC[0]) * Q[i];
+            frame_it->second.T = RIC[0] * T[i] + TIC[0];
             i++;
             continue;
         }
@@ -482,8 +503,10 @@ bool MyEstimator::initialStructure()
         Eigen::MatrixXd T_pnp;
         cv::cv2eigen(t, T_pnp);
         T_pnp = R_pnp * (-T_pnp);
-        frame_it->second.R = R_pnp * RIC[0].transpose();
-        frame_it->second.T = T_pnp;
+        // frame_it->second.R = R_pnp * RIC[0].transpose();
+        // frame_it->second.T = T_pnp;
+        frame_it->second.R = RIC[0] * R_pnp;
+        frame_it->second.T = RIC[0] * T_pnp + TIC[0];
     }
     bool align_ok = visualInitialAlign();
     if (align_ok)
@@ -505,7 +528,7 @@ bool MyEstimator::visualInitialAlign()
     bool result = VisualOdomAlignment(all_image_frame_, x);
     if(!result)
     {
-        ROS_DEBUG("solve g failed!");
+        ROS_DEBUG("visual init align failed!");
         return false;
     }
 
@@ -519,15 +542,61 @@ bool MyEstimator::visualInitialAlign()
         all_image_frame_ [headers_[i]].is_key_frame = true;
     }
 
+    // for (int i = 0; i <= frame_count_;++i) {
+    //     std::cout << "==== i " << i << " Ts " << Ps_[i].transpose() << std::endl 
+    //             << " Rs " << RPYFromQuat(Eigen::Quaterniond(Rs_[i])).transpose() << std::endl;
+    // }
+
     double s = (x.tail<1>())(0);
-    for (int i = frame_count_; i >= 0; i--)
-        Ps_[i] = s * Ps_[i] - Rs_[i] * TIC[0] - (s * Ps_[0] - Rs_[0] * TIC[0]);
+    // for (int i = frame_count_; i >= 0; i--)
+    //     Ps_[i] = s * Ps_[i] - Rs_[i] * TIC[0] - (s * Ps_[0] - Rs_[0] * TIC[0]);
 
-    ROS_DEBUG("visual init align: scale %f", s); 
+    // Weizhe Liu: update pose according to scale
+    for (int i = 1; i <= frame_count_; i++)
+        Ps_[i] = Rs_[i] * Rs_[i-1].transpose() * Ps_[i-1] + s * (Ps_[i] - Rs_[i] * Rs_[i-1].transpose() * Ps_[i-1]);
+    // and set Pose i be relative pose of Pose i to Pose 0,
+    // thus make all coord base on first frame's coord. 
+    for (int i = 1; i <= frame_count_; i++) {
+        Ps_[i] = s * (Ps_[i] - Rs_[i] * Rs_[0].transpose() * Ps_[0]);
+        Rs_[i] = Rs_[i] * Rs_[0].transpose();
+    }
+    Rs_[0].setIdentity();
+    Ps_[0].setZero();
 
+    ROS_INFO("visual init align: scale %f", s); 
+
+    // for (int i = 0; i <= frame_count_;++i) {
+    //     std::cout << "==== i " << i << " Ts " << Ps_[i].transpose() << std::endl 
+    //             << " Rs " << RPYFromQuat(Eigen::Quaterniond(Rs_[i])).transpose() << std::endl;
+    // }
+    
     f_manager_.clearDepth();
     f_manager_.triangulate(frame_count_, Ps_, Rs_, tic_, ric_);
 
+    return true;
+}
+
+// different from visualInitialAlign(), this function align Rs/Ps instead of camera pose which is in camera 0's coord.
+bool MyEstimator::visualOptimizeAlign()
+{
+    TicToc t_g;
+    Eigen::VectorXd x;
+    //solve scale
+    bool result = VisualOdomAlignmentOpt(frame_count_, headers_, Rs_, Ps_, all_image_frame_, x);
+    if(!result)
+    {
+        ROS_INFO("visual opt align failed!");
+        return false;
+    }
+
+    double s = (x.tail<1>())(0);
+    for (int i = 1; i <= frame_count_; i++)
+        Ps_[i] = Rs_[i] * Rs_[i-1].transpose() * Ps_[i-1] + s * (Ps_[i] - Rs_[i] * Rs_[i-1].transpose() * Ps_[i-1]);
+
+    ROS_INFO("visual optimize align: scale %f", s); 
+
+    f_manager_.clearDepth();
+    //f_manager_.triangulate(frame_count_, Ps_, Rs_, tic_, ric_); //no need as it will be called by outside caller.
     return true;
 }
 
@@ -706,17 +775,7 @@ void MyEstimator::optimization()
         problem.AddResidualBlock(marginalization_factor, NULL,
                                  last_marginalization_parameter_blocks_);
     }
-    // if(USE_IMU)
-    // {
-    //     for (int i = 0; i < frame_count_; i++)
-    //     {
-    //         int j = i + 1;
-    //         if (pre_integrations[j]->sum_dt > 10.0)
-    //             continue;
-    //         IMUFactor* imu_factor = new IMUFactor(pre_integrations[j]);
-    //         problem.AddResidualBlock(imu_factor, NULL, para_Pose_[i], para_SpeedBias[i], para_Pose_[j], para_SpeedBias[j]);
-    //     }
-    // }
+
     for (int i = 0; i < frame_count_; i++)
     {
         int j = i + 1;
@@ -724,9 +783,9 @@ void MyEstimator::optimization()
         auto p2 = all_image_frame_[headers_[i]].p_odom;
         auto q1 = all_image_frame_[headers_[j]].q_odom;
         auto q2 = all_image_frame_[headers_[i]].q_odom;
-        Eigen::Vector3d delta_p = p2 - q2 * p1;
+        Eigen::Vector3d delta_p = p2 - q2 * q1.inverse() * p1;
         Eigen::Quaterniond delta_q = q2 * q1.inverse();
-        problem.AddResidualBlock(OdomFactor::Create(delta_p, delta_q), NULL, para_Pose_[i], para_Pose_[j]);
+        problem.AddResidualBlock(OdomFunctor::Create(delta_p, delta_q), NULL, para_Pose_[i], para_Pose_[j]);
     }
 
     int f_m_cnt = 0;
@@ -809,17 +868,6 @@ void MyEstimator::optimization()
             marginalization_info->addResidualBlockInfo(residual_block_info);
         }
 
-        // if(USE_IMU)
-        // {
-        //     if (pre_integrations[1]->sum_dt < 10.0)
-        //     {
-        //         IMUFactor* imu_factor = new IMUFactor(pre_integrations[1]);
-        //         ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(imu_factor, NULL,
-        //                                                                    std::vector<double *>{para_Pose_[0], para_SpeedBias[0], para_Pose_[1], para_SpeedBias[1]},
-        //                                                                    std::vector<int>{0, 1});
-        //         marginalization_info->addResidualBlockInfo(residual_block_info);
-        //     }
-        // }
         {
             int i = 0;
             int j = 1;
@@ -827,9 +875,9 @@ void MyEstimator::optimization()
             auto p2 = all_image_frame_[headers_[i]].p_odom;
             auto q1 = all_image_frame_[headers_[j]].q_odom;
             auto q2 = all_image_frame_[headers_[i]].q_odom;
-            Eigen::Vector3d delta_p = p2 - q2 * p1;
+            Eigen::Vector3d delta_p = p2 - q2 * q1.inverse() * p1;
             Eigen::Quaterniond delta_q = q2 * q1.inverse();
-            ceres::CostFunction* odom_factor = OdomFactor::Create(delta_p, delta_q);
+            ceres::CostFunction* odom_factor = OdomFunctor::Create(delta_p, delta_q);
             ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(odom_factor, NULL,
                                                                            std::vector<double *>{para_Pose_[i], para_Pose_[j]},
                                                                            std::vector<int>{i, j});

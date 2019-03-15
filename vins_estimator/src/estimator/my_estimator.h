@@ -82,6 +82,7 @@ private:
 
     std::unique_ptr<Eigen::Vector3d> getInterpolatedOdomPose(double time);
     std::unique_ptr<std::pair<Eigen::Vector3d,Eigen::Vector3d>> getOdomInterval(double t1, double t2);
+    bool visualOptimizeAlign();
 
 private:
     Matrix3d ric_[2];

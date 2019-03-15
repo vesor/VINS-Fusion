@@ -177,7 +177,7 @@ void MyNode::sync_process()
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "loc_test");
+    ros::init(argc, argv, "vins_estimator");
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
     
     if(argc != 2)
