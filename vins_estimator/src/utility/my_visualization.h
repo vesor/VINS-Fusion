@@ -27,6 +27,7 @@
 
 #include "../estimator/parameters.h"
 #include <fstream>
+#include <map>
 
 class MyEstimator;
 class MyVisualizer {
@@ -55,6 +56,8 @@ public:
 
     void pubCar(double t);
 
+    void pubFakeVelodyne(double t);
+
 private:
     const MyEstimator &estimator;
 
@@ -69,4 +72,7 @@ private:
     ros::Publisher pub_keyframe_pose;
     ros::Publisher pub_keyframe_point;
     ros::Publisher pub_extrinsic;
+    ros::Publisher pub_fake_velodyne_;
+
+    std::map<int, Eigen::Vector3d> points_buf_;
 };

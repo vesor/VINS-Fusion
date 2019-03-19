@@ -9,6 +9,8 @@
 
 #include "visualization.h"
 #include "../estimator/my_estimator.h"
+#include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/point_cloud_conversion.h>
 
 using namespace ros;
 using namespace Eigen;
@@ -43,6 +45,8 @@ MyVisualizer::MyVisualizer(ros::NodeHandle &n, const MyEstimator &e)
     pub_keyframe_pose = n.advertise<nav_msgs::Odometry>("keyframe_pose", 1000);
     pub_keyframe_point = n.advertise<sensor_msgs::PointCloud>("keyframe_point", 1000);
     pub_extrinsic = n.advertise<nav_msgs::Odometry>("extrinsic", 1000);
+
+    pub_fake_velodyne_ = n.advertise<sensor_msgs::PointCloud2>("/velodyne_points", 100);
 
     cameraposevisual.setScale(0.1);
     cameraposevisual.setLineWidth(0.01);
@@ -277,6 +281,67 @@ void MyVisualizer::pubPointCloud(double t)
         }
     }
     pub_margin_cloud.publish(margin_cloud);
+}
+
+void MyVisualizer::pubFakeVelodyne(double t)
+{
+    sensor_msgs::PointCloud point_cloud;
+    sensor_msgs::PointCloud2 point_cloud2;
+    
+    point_cloud.header.frame_id = "velodyne";
+    point_cloud.header.stamp = ros::Time(t);
+
+    double approx_time = -1;
+    for (auto &it_per_id : estimator.f_manager_.feature_)
+    {
+        int used_num;
+        used_num = it_per_id.feature_per_frame.size();
+        if (!(used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
+            continue;
+
+        bool pointsInWindow = (it_per_id.start_frame <= WINDOW_SIZE * 3.0 / 4.0 && it_per_id.solve_flag == 1); // points in window
+        if (pointsInWindow) {
+            approx_time = it_per_id.feature_per_frame.back().time;
+        }
+        
+        bool marginPoints = (it_per_id.start_frame == 0 && it_per_id.feature_per_frame.size() <= 2 && it_per_id.solve_flag == 1); // the margin points
+        
+        if (pointsInWindow || marginPoints)
+        {
+            int imu_i = it_per_id.start_frame;
+            Eigen::Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
+            Eigen::Vector3d w_pts_i = estimator.Rs_[imu_i] * (estimator.ric_[0] * pts_i + estimator.tic_[0]) + estimator.Ps_[imu_i];
+            points_buf_[it_per_id.feature_id] = w_pts_i;
+            if (points_buf_.size() > 500) {
+                points_buf_.erase(points_buf_.begin());
+            }
+        }
+        
+    }
+
+    Eigen::Matrix3d world_in_local_R = estimator.Rs_[WINDOW_SIZE].transpose();
+    Eigen::Vector3d world_in_local_T = -world_in_local_R*estimator.Ps_[WINDOW_SIZE];
+
+    Eigen::Matrix3d odom_in_lidar_R;
+    odom_in_lidar_R.setIdentity();
+    Eigen::Vector3d odom_in_lidar_T;
+    odom_in_lidar_T << -(1.99-1.029), 0, -(1.58-0.3234);
+    
+    for (const auto& pr : points_buf_) {
+        // convert world point to local point in current odom coordinate
+        Eigen::Vector3d point = world_in_local_R * pr.second + world_in_local_T;
+        // convert odom coord to lidar coord
+        point = odom_in_lidar_R * point + odom_in_lidar_T;
+
+        geometry_msgs::Point32 p;
+        p.x = point(0);
+        p.y = point(1);
+        p.z = point(2);
+        point_cloud.points.push_back(p);
+    }
+
+    convertPointCloudToPointCloud2(point_cloud, point_cloud2);
+    pub_fake_velodyne_.publish(point_cloud2);
 }
 
 

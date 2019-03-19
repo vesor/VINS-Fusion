@@ -245,14 +245,16 @@ void MyEstimator::processMeasurements()
 
         processImage(feature.second, t, odom_pose);
 
-        visualizer_.printStatistics(0);
+        // visualizer_.printStatistics(0);
 
-        visualizer_.pubOdometry(t);
-        visualizer_.pubKeyPoses(t);
-        visualizer_.pubCameraPose(t);
-        visualizer_.pubPointCloud(t);
-        visualizer_.pubKeyframe();
-        visualizer_.pubTF(t);
+        // visualizer_.pubOdometry(t);
+        // visualizer_.pubKeyPoses(t);
+        // visualizer_.pubCameraPose(t);
+        // visualizer_.pubPointCloud(t);
+        // visualizer_.pubKeyframe();
+        // visualizer_.pubTF(t);
+
+        visualizer_.pubFakeVelodyne(t);
     }
 
     prevTime_ = curTime_;
@@ -286,7 +288,7 @@ void MyEstimator::processImage(const std::map<int, std::vector<std::pair<int, Ei
 {
     ROS_DEBUG("new image coming ------------------------------------------");
     ROS_DEBUG("Adding feature points %lu", image.size());
-    if (f_manager_.addFeatureCheckParallax(frame_count_, image, td_))
+    if (f_manager_.addFeatureCheckParallax(frame_count_, image, td_, header))
     {
         marginalize_old_ = true;
         //printf("keyframe\n");
@@ -425,13 +427,6 @@ bool MyEstimator::initialStructure()
         return false;
     }
 
-    // std::cout << "==== TIC " << TIC[0].transpose() << std::endl 
-    //             << " RIC " << RPYFromQuat(Eigen::Quaterniond(RIC[0])).transpose() << std::endl;
-
-    // for (int i = 0; i <= frame_count_;++i) {
-    //     std::cout << "==== i " << i << " Ts " << T[i].transpose() << std::endl 
-    //             << " Qs " << RPYFromQuat(Eigen::Quaterniond(Q[i])).transpose() << std::endl;
-    // }
     //printf("t_sfm %i time: %f\n", (int)sfm_f.size(), t_sfm.toc());
     //solve pnp for all frame
     std::map<double, ImageFrame>::iterator frame_it;
@@ -446,11 +441,8 @@ bool MyEstimator::initialStructure()
             frame_it->second.is_key_frame = true;
             // frame_it->second.R = Q[i].toRotationMatrix() * RIC[0].transpose();
             // frame_it->second.T = T[i];
-
-            // Weizhe Liu: convert R/t to be in body (IMU) coordinate
-            // which means R/t is the camera pose in frame0's body coord 
-            frame_it->second.R = Eigen::Quaterniond(RIC[0]) * Q[i];
-            frame_it->second.T = RIC[0] * T[i] + TIC[0];
+            frame_it->second.R = Q[i];
+            frame_it->second.T = T[i];
             i++;
             continue;
         }
@@ -505,8 +497,8 @@ bool MyEstimator::initialStructure()
         T_pnp = R_pnp * (-T_pnp);
         // frame_it->second.R = R_pnp * RIC[0].transpose();
         // frame_it->second.T = T_pnp;
-        frame_it->second.R = RIC[0] * R_pnp;
-        frame_it->second.T = RIC[0] * T_pnp + TIC[0];
+        frame_it->second.R = R_pnp;
+        frame_it->second.T = T_pnp;
     }
     bool align_ok = visualInitialAlign();
     if (align_ok)
@@ -523,6 +515,27 @@ bool MyEstimator::initialStructure()
 bool MyEstimator::visualInitialAlign()
 {
     TicToc t_g;
+    if (all_image_frame_.size() < 2) return false;
+
+    // convert the coord.
+    // R/t in all_image_frame_ is Camera k pose in Camera 0's coord.
+    // first convert R/t to the camera pose in frame0's body coord
+    for (auto& frame : all_image_frame_)
+    {
+        frame.second.R = RIC[0] * frame.second.R;
+        frame.second.T = RIC[0] * frame.second.T + TIC[0];
+    }
+    // then the odom pose determined by camera is the relative pose of camera k from camera 0
+    auto& first_frame = all_image_frame_.begin()->second;
+    for (auto iter = std::next(all_image_frame_.begin()); iter != all_image_frame_.end(); ++iter)
+    {
+        auto& cur_frame = iter->second;
+        cur_frame.T = cur_frame.T - cur_frame.R * first_frame.R.transpose() * first_frame.T;
+        cur_frame.R = cur_frame.R * first_frame.R.transpose();
+    }
+    first_frame.R.setIdentity();
+    first_frame.T.setZero();
+
     Eigen::VectorXd x;
     //solve scale
     bool result = VisualOdomAlignment(all_image_frame_, x);
@@ -542,11 +555,6 @@ bool MyEstimator::visualInitialAlign()
         all_image_frame_ [headers_[i]].is_key_frame = true;
     }
 
-    // for (int i = 0; i <= frame_count_;++i) {
-    //     std::cout << "==== i " << i << " Ts " << Ps_[i].transpose() << std::endl 
-    //             << " Rs " << RPYFromQuat(Eigen::Quaterniond(Rs_[i])).transpose() << std::endl;
-    // }
-
     double s = (x.tail<1>())(0);
     // for (int i = frame_count_; i >= 0; i--)
     //     Ps_[i] = s * Ps_[i] - Rs_[i] * TIC[0] - (s * Ps_[0] - Rs_[0] * TIC[0]);
@@ -554,21 +562,8 @@ bool MyEstimator::visualInitialAlign()
     // Weizhe Liu: update pose according to scale
     for (int i = 1; i <= frame_count_; i++)
         Ps_[i] = Rs_[i] * Rs_[i-1].transpose() * Ps_[i-1] + s * (Ps_[i] - Rs_[i] * Rs_[i-1].transpose() * Ps_[i-1]);
-    // and set Pose i be relative pose of Pose i to Pose 0,
-    // thus make all coord base on first frame's coord. 
-    for (int i = 1; i <= frame_count_; i++) {
-        Ps_[i] = s * (Ps_[i] - Rs_[i] * Rs_[0].transpose() * Ps_[0]);
-        Rs_[i] = Rs_[i] * Rs_[0].transpose();
-    }
-    Rs_[0].setIdentity();
-    Ps_[0].setZero();
 
     ROS_INFO("visual init align: scale %f", s); 
-
-    // for (int i = 0; i <= frame_count_;++i) {
-    //     std::cout << "==== i " << i << " Ts " << Ps_[i].transpose() << std::endl 
-    //             << " Rs " << RPYFromQuat(Eigen::Quaterniond(Rs_[i])).transpose() << std::endl;
-    // }
     
     f_manager_.clearDepth();
     f_manager_.triangulate(frame_count_, Ps_, Rs_, tic_, ric_);

@@ -37,7 +37,8 @@ int MyFeatureManager::getFeatureCount()
 }
 
 
-bool MyFeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, double time)
+bool MyFeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, 
+    double td, double time)
 {
     //printf("input feature: %d\n", (int)image.size());
     //printf("num of feature: %d\n", getFeatureCount());
@@ -49,7 +50,7 @@ bool MyFeatureManager::addFeatureCheckParallax(int frame_count, const map<int, v
     long_track_num_ = 0;
     for (auto &id_pts : image)
     {
-        MyFeaturePerFrame f_per_fra(id_pts.second[0].second, time);
+        MyFeaturePerFrame f_per_fra(id_pts.second[0].second, td, time);
         assert(id_pts.second[0].first == 0);
 
         int feature_id = id_pts.first;

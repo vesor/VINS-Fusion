@@ -28,6 +28,7 @@ public:
     
     template <typename T>
     bool operator()(const T* const param1 , const T* const param2, T* residuals) const {
+    #if 0
         Eigen::Matrix<T,3,1> Pi(param1[0], param1[1], param1[2]);
         Eigen::Quaternion<T> Qi(param1[6], param1[3], param1[4], param1[5]);
         Eigen::Matrix<T,3,1> Pj(param2[0], param2[1], param2[2]);
@@ -36,9 +37,13 @@ public:
         //Eigen::Quaternion<T> delta_q = Qj * Qi.inverse();
 
         // only consider relative distance err
-        residuals[0] = T(0);//T(0.01) * (delta_p.norm() - p_.norm());
+        residuals[0] = /*T(1.0) */ (delta_p.norm() - p_.norm());
         //std::cout << "=== res " << residuals[0] << std::endl;
         return true;
+    #else
+        residuals[0] = T(0);
+        return true;
+    #endif
     }
 
 private:

@@ -61,7 +61,7 @@ MyNode::MyNode(const std::string& config_file): nh_("~"),estimator_(nh_)
     sub_img0_ = nh_.subscribe(IMAGE0_TOPIC, 100, &MyNode::img0_callback, this);
     sub_odom_ = nh_.subscribe("/odom", 1000, &MyNode::odom_callback, this);
 
-    pub_points_ = nh_.advertise<sensor_msgs::PointCloud2>("/velodyne_points", 100);
+    //pub_points_ = nh_.advertise<sensor_msgs::PointCloud2>("/velodyne_points", 100);
 
     estimator_.setPointsCloudCallback(std::bind(&MyNode::on_3d_points_produced, this, std::placeholders::_1, std::placeholders::_2));
 }
@@ -145,7 +145,7 @@ void MyNode::on_3d_points_produced(const std::vector<Eigen::Vector3d>& points, d
     }
     convertPointCloudToPointCloud2(msg, msg2);
 
-    pub_points_.publish(msg2);
+    //pub_points_.publish(msg2);
     //std::cout << "pub points " << msg.points.size() << std::endl;
 }
 

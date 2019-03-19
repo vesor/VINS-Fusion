@@ -13,7 +13,7 @@
 class MyFeaturePerFrame
 {
   public:
-    MyFeaturePerFrame(const Eigen::Matrix<double, 7, 1> &_point, double _td)
+    MyFeaturePerFrame(const Eigen::Matrix<double, 7, 1> &_point, double _td, double _time)
     {
         point.x() = _point(0);
         point.y() = _point(1);
@@ -23,12 +23,14 @@ class MyFeaturePerFrame
         velocity.x() = _point(5); 
         velocity.y() = _point(6); 
         td = _td;
+        time = _time;
     }
 
     double td;
     Eigen::Vector3d point;
     Eigen::Vector2d uv;
     Eigen::Vector2d velocity;
+    double time;
 };
 
 class MyFeaturePerId
@@ -60,7 +62,8 @@ class MyFeatureManager
     void setRic(Eigen::Matrix3d ric[]);
     void clearState();
     int getFeatureCount();
-    bool addFeatureCheckParallax(int frame_count, const std::map<int, std::vector<std::pair<int, Eigen::Matrix<double, 7, 1>>>> &image, double td);
+    bool addFeatureCheckParallax(int frame_count, const std::map<int, std::vector<std::pair<int, Eigen::Matrix<double, 7, 1>>>> &image, 
+            double td, double time);
     std::vector<std::pair<Eigen::Vector3d, Eigen::Vector3d>> getCorresponding(int frame_count_l, int frame_count_r);
     void setDepth(const Eigen::VectorXd &x);
     void removeFailures();
@@ -76,7 +79,7 @@ class MyFeatureManager
     void removeBack();
     void removeFront(int frame_count);
     void removeOutlier(std::set<int> &outlierIndex);
-    
+
     std::list<MyFeaturePerId> feature_;
 
   private:
