@@ -20,8 +20,6 @@
 #include "my_transform.h"
 #include "estimator/parameters.h"
 
-//#define IMAGE_COMPRESSED
-
 class MyNode {
 public:
     MyNode(const std::string& config_file, const bool compressed);
