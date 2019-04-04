@@ -13,37 +13,44 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud_conversion.h>
+#include <sensor_msgs/CompressedImage.h>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
 #include "estimator/my_estimator.h"
 #include "my_transform.h"
 #include "estimator/parameters.h"
 
-#define IMAGE_COMPRESSED
-
-#ifdef IMAGE_COMPRESSED
-#include <sensor_msgs/CompressedImage.h>
-#define MSG_IMAGE_TYPE sensor_msgs::CompressedImage
-#else
-#define MSG_IMAGE_TYPE sensor_msgs::Image
-#endif
+//#define IMAGE_COMPRESSED
 
 class MyNode {
 public:
-    MyNode(const std::string& config_file);
+    MyNode(const std::string& config_file, const bool compressed);
 
-    void img0_callback(const MSG_IMAGE_TYPE::ConstPtr &img_msg);
+    void img0_callback(const sensor_msgs::Image::ConstPtr &img_msg);
+    void img0_compressed_callback(const sensor_msgs::CompressedImage::ConstPtr &img_msg);
     void odom_callback(const nav_msgs::Odometry::ConstPtr& msg);
-    cv::Mat getImageFromMsg(const MSG_IMAGE_TYPE::ConstPtr &img_msg);
+    cv::Mat getImageFromMsg(const sensor_msgs::Image::ConstPtr &img_msg);
+    cv::Mat getImageFromMsg(const sensor_msgs::CompressedImage::ConstPtr &img_msg);
     void on_3d_points_produced(const std::vector<Eigen::Vector3d>& points, double time);
     void sync_process();
 
 
-
-queue<MSG_IMAGE_TYPE::ConstPtr> img0_buf;
-std::mutex m_buf;
-
 private:
+    template<typename T> 
+    void getImageFromBuf(T& buf0, cv::Mat& image, std_msgs::Header& header, double& time) {
+        if(!buf0.empty())
+        {
+            time = buf0.front()->header.stamp.toSec();
+            header = buf0.front()->header;
+            image = getImageFromMsg(buf0.front());
+            buf0.pop();
+        }
+    }
+
+    queue<sensor_msgs::Image::ConstPtr> img0_buf;
+    queue<sensor_msgs::CompressedImage::ConstPtr> img0_buf_compressed;
+    std::mutex m_buf;
+
     ros::NodeHandle nh_;
     ros::Subscriber sub_img0_;
     ros::Subscriber sub_odom_;
@@ -51,14 +58,19 @@ private:
     ros::Publisher pub_points_;
 
     MyEstimator estimator_;
+    const bool compressed_;
 };
 
-MyNode::MyNode(const std::string& config_file): nh_("~"),estimator_(nh_)
+MyNode::MyNode(const std::string& config_file, const bool compressed): nh_("~"),estimator_(nh_),compressed_(compressed)
 {
     readParameters(config_file);
     estimator_.setParameter();
 
-    sub_img0_ = nh_.subscribe(IMAGE0_TOPIC, 100, &MyNode::img0_callback, this);
+    if (compressed_)
+        sub_img0_ = nh_.subscribe(IMAGE0_TOPIC, 100, &MyNode::img0_compressed_callback, this);
+    else
+        sub_img0_ = nh_.subscribe(IMAGE0_TOPIC, 100, &MyNode::img0_callback, this);
+
     sub_odom_ = nh_.subscribe("/odom", 1000, &MyNode::odom_callback, this);
 
     //pub_points_ = nh_.advertise<sensor_msgs::PointCloud2>("/velodyne_points", 100);
@@ -67,10 +79,17 @@ MyNode::MyNode(const std::string& config_file): nh_("~"),estimator_(nh_)
 }
 
 
-void MyNode::img0_callback(const MSG_IMAGE_TYPE::ConstPtr &img_msg)
+void MyNode::img0_callback(const sensor_msgs::Image::ConstPtr &img_msg)
 {
     m_buf.lock();
     img0_buf.push(img_msg);
+    m_buf.unlock();
+}
+
+void MyNode::img0_compressed_callback(const sensor_msgs::CompressedImage::ConstPtr &img_msg)
+{
+    m_buf.lock();
+    img0_buf_compressed.push(img_msg);
     m_buf.unlock();
 }
 
@@ -89,15 +108,12 @@ void MyNode::odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
     estimator_.inputOdometry(t, pose);
 }
 
-cv::Mat MyNode::getImageFromMsg(const MSG_IMAGE_TYPE::ConstPtr &img_msg)
+cv::Mat MyNode::getImageFromMsg(const sensor_msgs::Image::ConstPtr &img_msg)
 {
     cv_bridge::CvImageConstPtr ptr;
-#ifdef IMAGE_COMPRESSED
-    ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
-#else
     if (img_msg->encoding == "8UC1")
     {
-        MSG_IMAGE_TYPE img;
+        sensor_msgs::Image img;
         img.header = img_msg->header;
         img.height = img_msg->height;
         img.width = img_msg->width;
@@ -109,7 +125,15 @@ cv::Mat MyNode::getImageFromMsg(const MSG_IMAGE_TYPE::ConstPtr &img_msg)
     }
     else
         ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
-#endif
+
+    cv::Mat img = ptr->image.clone();
+    return img;
+}
+
+cv::Mat MyNode::getImageFromMsg(const sensor_msgs::CompressedImage::ConstPtr &img_msg)
+{
+    cv_bridge::CvImageConstPtr ptr;
+    ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
     cv::Mat img = ptr->image.clone();
     return img;
 }
@@ -157,15 +181,14 @@ void MyNode::sync_process()
         cv::Mat image;
         std_msgs::Header header;
         double time = 0;
+        
         m_buf.lock();
-        if(!img0_buf.empty())
-        {
-            time = img0_buf.front()->header.stamp.toSec();
-            header = img0_buf.front()->header;
-            image = getImageFromMsg(img0_buf.front());
-            img0_buf.pop();
-        }
+        if (compressed_)
+            getImageFromBuf(img0_buf_compressed, image, header, time);
+        else
+            getImageFromBuf(img0_buf, image, header, time);
         m_buf.unlock();
+
         if(!image.empty()) {
             estimator_.inputImage(time, image);
         }
@@ -180,7 +203,7 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "vins_estimator");
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
     
-    if(argc != 2)
+    if(argc < 2)
     {
         printf("please intput: rosrun vins vins_node [config file] \n"
                "for example: rosrun vins vins_node "
@@ -191,7 +214,12 @@ int main(int argc, char **argv)
     string config_file = argv[1];
     printf("config_file: %s\n", argv[1]);
 
-    
+    bool compressed = false;
+    if (argc > 2) {
+        std::string compressed_str = argv[2];
+        compressed = (compressed_str == "compressed");
+    }
+
 #ifdef EIGEN_DONT_PARALLELIZE
     ROS_DEBUG("EIGEN_DONT_PARALLELIZE");
 #endif
@@ -199,7 +227,7 @@ int main(int argc, char **argv)
     ROS_WARN("waiting for image and imu...");
 
 
-    MyNode my_node(config_file);
+    MyNode my_node(config_file, compressed);
     std::thread sync_thread(&MyNode::sync_process, &my_node);
 
     ros::spin();
